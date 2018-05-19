@@ -1,0 +1,157 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Example</title>
+    <link rel="stylesheet" type="text/css" href="css/dx.common.css" />
+    <link rel="stylesheet" type="text/css" href="css/dx.light.css" />
+
+    <script type="text/javascript" src="js/jquery-2.2.3.min.js"></script>
+    <script type="text/javascript" src="js/dx.all.js"></script>
+    <script type="text/javascript" src="data.js"></script>
+
+    <script type="text/javascript">
+
+    </script>
+</head>
+<body id="form">
+
+
+    <div id="treeList"></div>
+    </div>
+
+
+    <script>
+        $(function () {
+
+            function foreachNodes(nodes, func) {
+                for (var i = 0; i < nodes.length; i++) {
+                    func(nodes[i]);
+                    foreachNodes(nodes[i].children, func);
+                }
+            }
+
+            $("#treeList").dxTreeList({
+                dataSource: treeListData,
+                keyExpr: "id",
+                parentIdExpr: "parentId",
+                columns: [{
+                    dataField: "name"
+                }, {
+                    dataField: "status",
+                    caption: "Tag",
+                    calculateDisplayValue: function (data) {
+                        switch (data.status) {
+                            case 0:
+                                return "None";
+                            case 1:
+                                return "Updated";
+                            case 2:
+                                return "New";
+                        }
+                    },
+                }, "createdBy", {
+                    dataField: "createdDate",
+                    dataType: "date"
+                }, {
+                    dataField: "modifiedDate",
+                    dataType: "date"
+                }, "hidden"],
+                columnAutoWidth: true,
+                showRowLines: true,
+                selection: {
+                    mode: "multiple",
+                    showCheckBoxesMode: "always"
+                },
+                onSelectionChanged: function (e) {
+                    if (e.component._skipChildrenProcessing) return;
+                    var currentSelectedRowKeys = e.currentSelectedRowKeys;
+                    var currentDeselectedRowKeys = e.currentDeselectedRowKeys;
+
+                    if (currentSelectedRowKeys.length === 1 || currentDeselectedRowKeys.length === 1) {
+                        var key = currentSelectedRowKeys.length ? currentSelectedRowKeys[0] : currentDeselectedRowKeys[0];
+                        var rowIndex = e.component.getRowIndexByKey(key);
+                        var row = e.component.getVisibleRows()[rowIndex];
+                        var childrenKeys = [];
+
+                        if (!row) return;
+
+                        foreachNodes(row.node.children, function (node) {
+                            childrenKeys.push(node.key);
+                        });
+
+                        (currentSelectedRowKeys.length ? e.component.selectRows(childrenKeys, true) : e.component.deselectRows(childrenKeys)).done(function () {
+                            var node = row.node;
+                            var parentRowIndexes = [];
+
+                            while (node.parent) {
+                                node = node.parent;
+                                rowIndex = e.component.getRowIndexByKey(node.key);
+                                row = e.component.getVisibleRows()[rowIndex];
+                                if (row) {
+                                    parentRowIndexes.push(rowIndex);
+                                }
+                            }
+
+                            if (parentRowIndexes.length) {
+                                e.component.repaintRows(parentRowIndexes);
+                            }
+                        });
+                    }
+                },
+                onCellPrepared: function (e) {
+                    if (e.columnIndex === 0 && e.row && e.row.rowType === "data") {
+                        var isSelected = e.row.isSelected,
+                            allChildrenCount = 0,
+                            allSelectedCount = 0;
+
+                        foreachNodes(e.row.node.children, function (node) {
+                            if (!node.children.length) {
+                                allChildrenCount++;
+                                if (e.component.isRowSelected(node.key)) {
+                                    allSelectedCount++;
+                                }
+                            }
+                        });
+
+                        var newIsSelected;
+
+                        if (allChildrenCount === 0) {
+                            newIsSelected = isSelected;
+                        } else if (allSelectedCount === 0) {
+                            newIsSelected = false;
+                        } else if (allSelectedCount === allChildrenCount) {
+                            newIsSelected = true;
+                        }
+                        if (isSelected !== newIsSelected) {
+                            e.component._skipChildrenProcessing = e.component._skipChildrenProcessing || 0;
+                            e.component._skipChildrenProcessing++
+                            var d = $.Deferred();
+                            if (!isSelected !== !newIsSelected) {
+                                if (newIsSelected) {
+                                    d = e.component.selectRows(e.row.key, true);
+                                }
+                                else {
+                                    d = e.component.deselectRows(e.row.key);
+                                }
+                            }
+                            else {
+                                d.resolve();
+                            }
+                            d.always(function () {
+                                if (newIsSelected === undefined) {
+                                    setTimeout(function () {
+                                        e.cellElement.find(".dx-select-checkbox").dxCheckBox("option", "value", undefined);
+                                    });
+                                }
+                                e.component._skipChildrenProcessing--;
+                            });
+                        }
+                    }
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
+
